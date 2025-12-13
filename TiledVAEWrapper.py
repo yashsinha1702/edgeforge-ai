@@ -8,7 +8,7 @@ class TiledVAEWrapper:
         self.tile_size = tile_size  # Pixel size of the tile (e.g., 512)
         self.overlap = overlap      # Pixel overlap to prevent seams
         
-        # Scaling factor: VAEs usually downsample by 8x
+
         self.scale_factor = 8 
         self.latent_tile_size = tile_size // self.scale_factor
         self.latent_overlap = overlap // self.scale_factor
@@ -18,7 +18,7 @@ class TiledVAEWrapper:
         Decodes large latents by splitting them into tiles to save VRAM.
         """
         # 1. Initialize the output buffer on CPU (System RAM) to save VRAM
-        # [cite: 132] "Moving data between VRAM and System RAM"
+        # "Moving data between VRAM and System RAM"
         batch, channels, height, width = latents.shape
         output_height = height * self.scale_factor
         output_width = width * self.scale_factor
