@@ -88,3 +88,28 @@ class TiledVAEWrapper:
             grid.append(pos)
             pos += (tile_size - overlap)
         return grid
+
+
+
+    def _get_gaussian_mask(self, height, width):
+        """
+        Creates a 2D Gaussian mask to weight center pixels higher than edge pixels.
+        This prevents 'seams' or grid artifacts in the final image.
+        """
+        # Create a 1D gaussian distribution
+        def get_1d_gaussian(size):
+            x = torch.arange(size, dtype=torch.float32)
+            center = size / 2.0
+            sigma = size / 3.0 # Controls the 'spread'. 3.0 is standard.
+            return torch.exp(-(x - center)**2 / (2 * sigma**2))
+
+        gauss_h = get_1d_gaussian(height).unsqueeze(1) # Column vector
+        gauss_w = get_1d_gaussian(width).unsqueeze(0)  # Row vector
+        
+        # Outer product to create 2D Gaussian surface
+        mask = gauss_h @ gauss_w 
+        
+        # Reshape to match channel dims (C, H, W)
+        return mask.unsqueeze(0).to(self.vae.device)
+
+
