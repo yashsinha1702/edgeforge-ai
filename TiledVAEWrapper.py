@@ -40,7 +40,7 @@ class TiledVAEWrapper:
         grid_rows = self._get_grid(height, self.latent_tile_size, self.latent_overlap)
         grid_cols = self._get_grid(width, self.latent_tile_size, self.latent_overlap)
 
-        # 3. Fractional Batch Loop [cite: 40]
+        # 3. Fractional Batch Loop 
         print(f"Starting Tiled Decode: {len(grid_rows) * len(grid_cols)} tiles...")
         
         for h_start in tqdm(grid_rows):
@@ -63,7 +63,7 @@ class TiledVAEWrapper:
                 with torch.no_grad():
                     decoded_tile = self.vae.decode(latent_tile).sample
 
-                # Move back to CPU for storage [cite: 132]
+                # Move back to CPU for storage 
                 decoded_tile = decoded_tile.to('cpu')
 
                 # Calculate Pixel Coordinates for placement
