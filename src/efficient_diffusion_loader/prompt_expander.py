@@ -26,6 +26,35 @@ class PromptExpander:
         # Base quality boosters to ensure photorealism
         self.quality_boosters = "photorealistic, 8k, highly detailed, cinematic lighting, raw photo"
 
+
+
+    def generate_variations(self, base_intent, count=5):
+        """
+        Generates 'count' unique variations of the user's intent.
+        """
+        variations = []
+        print(f"Director: Brainstorming {count} scenarios for '{base_intent}'...")
+        
+        for i in range(count):
+            # Randomly mix and match failure modes
+            mode_keys = list(self.failure_modes.keys())
+            chosen_category = random.choice(mode_keys)
+            chosen_condition = random.choice(self.failure_modes[chosen_category])
+            
+            # Construct variation
+            prompt = f"{base_intent}, {chosen_condition}, {self.quality_boosters}"
+            
+            # Simplified constraint logic for variation
+            constraints = {"condition": chosen_condition}
+            
+            variations.append({
+                "prompt": prompt,
+                "constraints": constraints,
+                "seed": random.randint(1000, 99999) # Crucial: Different seed for each
+            })
+            
+        return variations
+        
     def expand(self, user_intent):
         """
         Translates a vague user intent into a structured EdgeForge directive.

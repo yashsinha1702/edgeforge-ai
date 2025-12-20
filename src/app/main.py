@@ -4,14 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from io import BytesIO
 from PIL import Image
 import torch
-import zipfile  # Required for ZIP export
+import zipfile
 
-# Import your custom modules
-from efficient_diffusion_loader import EdgeForgePipeline, PromptExpander, AutoLabeler
+# Import all modules
+from efficient_diffusion_loader import EdgeForgePipeline, PromptExpander, AutoLabeler, LayoutAugmenter
 
 app = FastAPI(title="EdgeForge AI API", version="0.1.0")
 
-# --- CORS CONFIGURATION ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,90 +18,108 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# --------------------------
 
-# --- GLOBAL VARIABLES ---
-# These must be defined at the top level so all functions can see them
+# Global Variables
 forge_pipeline = None
 director = None
 labeler = None
+layout_engine = None
 
 @app.on_event("startup")
 def load_models():
-    """
-    Load models once on startup.
-    """
-    # We use 'global' to write to the variables defined above
-    global forge_pipeline, director, labeler
-    
-    print("Loading EdgeForge Engine... (This may take a minute)")
-    
-    # 1. Initialize The Director (Prompt Logic)
+    global forge_pipeline, director, labeler, layout_engine
+    print("Loading EdgeForge Factory...")
     director = PromptExpander()
+    labeler = AutoLabeler()
+    layout_engine = LayoutAugmenter() # Initialize Remix Engine
     
-    # 2. Initialize The Artist (Diffusion + Tiled VAE)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     forge_pipeline = EdgeForgePipeline(device=device)
-
-    # 3. Initialize The Labeler (YOLO)
-    labeler = AutoLabeler()
-    
-    print("EdgeForge Engine Ready! 🚀")
+    print("Factory Ready! 🚀")
 
 @app.post("/generate")
 async def generate_endpoint(
     intent: str = Form(...),
     control_image: UploadFile = File(...)
 ):
-    """
-    Generates an image, detects objects, and returns a ZIP file with both.
-    """
-    # 1. Process Input Image
+    """ Single Shot Endpoint (No layout remixing) """
     image_bytes = await control_image.read()
     input_pil = Image.open(BytesIO(image_bytes)).convert("RGB")
-    input_pil.save("temp_input_debug.png")
+    input_pil.save("temp_input.png")
     
-    # Preprocess edges
-    processed_edges = forge_pipeline.preprocess_canny("temp_input_debug.png")
-
-    # 2. Run The Director
+    processed_edges = forge_pipeline.preprocess_canny("temp_input.png")
     directive = director.expand(intent)
-    print(f"Executing Directive: {directive['prompt']}")
-
-    # 3. Run The Artist
+    
     result_image = forge_pipeline.generate(
         prompt=directive['prompt'],
         control_image=processed_edges,
         seed=42
     )
-
-    # 4. Run The Labeler (Auto-Annotation)
-    # The 'labeler' variable is now guaranteed to exist from the global scope
+    
     label_text = labeler.label_image(result_image)
-    print(f"Generated Labels: {label_text}")
-
-    # 5. Create ZIP (Image + Label)
+    
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        # Add Image
         img_buffer = BytesIO()
         result_image.save(img_buffer, format="PNG")
         zip_file.writestr("generated_image.png", img_buffer.getvalue())
-        
-        # Add Label (YOLO Format)
         zip_file.writestr("generated_image.txt", label_text)
         
-        # Add Metadata
-        zip_file.writestr("metadata.json", str(directive))
+    zip_buffer.seek(0)
+    return Response(content=zip_buffer.getvalue(), media_type="application/zip")
 
-    # Return the ZIP
+@app.post("/generate_batch")
+async def generate_batch_endpoint(
+    intent: str = Form(...),
+    control_image: UploadFile = File(...),
+    batch_size: int = Form(5)
+):
+    """ Batch Factory Endpoint (WITH layout remixing) """
+    # 1. Load Base Layout
+    image_bytes = await control_image.read()
+    input_pil = Image.open(BytesIO(image_bytes)).convert("RGB")
+    input_pil.save("temp_batch_input.png")
+    
+    # Get base edges (The single car)
+    base_edges = forge_pipeline.preprocess_canny("temp_batch_input.png")
+
+    # 2. Director: Get Prompt Variations
+    variations = director.generate_variations(intent, count=batch_size)
+    
+    # 3. Production Loop
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+        
+        print(f"Starting Batch Generation of {batch_size} images...")
+        
+        for idx, var in enumerate(variations):
+            print(f"[{idx+1}/{batch_size}] Remixing & Forging...")
+
+            # --- GEOMETRY STEP ---
+            # Randomly shift/scale/multiply the car edges
+            remixed_edges = layout_engine.augment(base_edges, max_objects=3)
+            
+            # --- GENERATION STEP ---
+            img = forge_pipeline.generate(
+                prompt=var['prompt'],
+                control_image=remixed_edges, # Use the Remix!
+                seed=var['seed']
+            )
+            
+            # --- LABELING STEP ---
+            label_txt = labeler.label_image(img)
+            
+            # --- SAVE STEP ---
+            img_buffer = BytesIO()
+            img.save(img_buffer, format="PNG")
+            
+            filename = f"train_{idx:04d}"
+            zip_file.writestr(f"images/{filename}.png", img_buffer.getvalue())
+            zip_file.writestr(f"labels/{filename}.txt", label_txt)
+            
     zip_buffer.seek(0)
     return Response(
         content=zip_buffer.getvalue(), 
         media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=edgeforge_asset.zip"}
+        headers={"Content-Disposition": "attachment; filename=edgeforge_dataset.zip"}
     )
-
-@app.get("/health")
-def health_check():
-    return {"status": "online", "gpu": torch.cuda.get_device_name(0)}

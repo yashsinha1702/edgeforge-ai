@@ -45,11 +45,17 @@ class EdgeForgePipeline:
 
     def preprocess_canny(self, image_path):
         """
-        Converts a real image or sketch into a Canny edge map for ControlNet.
+        Converts a real image into a 1024x1024 Canny edge map.
         """
-        image = np.array(Image.open(image_path))
+        image_pil = Image.open(image_path).convert("RGB")
         
-        # Detect edges (100, 200 are standard thresholds)
+        # --- CRITICAL FIX 2: RESIZE ---
+        # SDXL works best at 1024x1024. We resize to ensure tensor alignment.
+        image_pil = image_pil.resize((1024, 1024), Image.LANCZOS)
+        
+        image = np.array(image_pil)
+        
+        # Detect edges
         image = cv2.Canny(image, 100, 200)
         image = image[:, :, None]
         image = np.concatenate([image, image, image], axis=2)
@@ -57,19 +63,18 @@ class EdgeForgePipeline:
         return Image.fromarray(image)
 
     def generate(self, prompt, control_image, seed=None):
-        """
-        Generates an image using the Tiled VAE for decoding.
-        """
         if seed:
             generator = torch.Generator(device=self.device).manual_seed(seed)
         else:
             generator = None
-
-        print(f"Generating: '{prompt}'...")
         
-        # 1. Run the Diffusion Process (Denoising)
+        # 1. Run Diffusion
+        # We need a strong negative prompt for SDXL to look realistic
+        negative_prompt = "cartoon, drawing, anime, low quality, blur, distortion, grid, messy"
+        
         output = self.pipe(
-            prompt,
+            prompt=prompt,
+            negative_prompt=negative_prompt, # Added Negative Prompt
             image=control_image,
             controlnet_conditioning_scale=0.5,
             output_type="latent",
@@ -77,17 +82,21 @@ class EdgeForgePipeline:
         )
         latents = output.images 
 
-        # 2. Use YOUR Tiled Decoder (Module 4)
-        print("Decoding with Fractional Batches...")
-        
-        # --- FIX START ---
-        # Explicitly move VAE to GPU. CPU Offload might have moved it to CPU.
-        self.vae.to(self.device) 
-        # --- FIX END ---
+        # --- CRITICAL FIX 1: SCALING ---
+        # The VAE expects latents to be scaled up. 
+        # Standard value is 0.13025, so we divide by it (effectively multiplying).
+        if hasattr(self.vae.config, "scaling_factor"):
+            latents = latents / self.vae.config.scaling_factor
+        else:
+            latents = latents / 0.13025 # Fallback for SDXL default
+        # -------------------------------
 
+        # 2. Decode
+        print("Decoding with Fractional Batches...")
+        self.vae.to(self.device) 
         final_image = self.tiled_vae.decode_with_blending(latents)
         
-        # 3. Post-process (Tensor to PIL)
+        # 3. Post-process
         final_image = (final_image / 2 + 0.5).clamp(0, 1)
         final_image = final_image.cpu().permute(0, 2, 3, 1).float().numpy()
         final_image = (final_image * 255).round().astype("uint8")

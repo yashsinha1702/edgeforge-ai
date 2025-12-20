@@ -20,6 +20,7 @@ function App() {
   const [generatedImage, setGeneratedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
+  const [batchSize, setBatchSize] = useState(1); // Default to 1 (Single Shot)
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -32,33 +33,39 @@ function App() {
       alert("Please provide both a prompt and a reference layout image.");
       return;
     }
-
+  
     setLoading(true);
-    setStatus('Director: Analyzing intent...'); // Simulating Module 1 feedback
-
+    setStatus(batchSize > 1 ? `Director: Planning ${batchSize} variations...` : 'Director: Analyzing intent...'); 
+  
     const formData = new FormData();
     formData.append('intent', prompt);
     formData.append('control_image', file);
-
-    try {
-        setStatus('Artist: Generating with Fractional Batching...'); 
-        
-        // Request a ZIP file
-        const response = await axios.post('http://127.0.0.1:8000/generate', formData, {
-          responseType: 'blob' 
-        });
   
-        // Automatically trigger download
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'edgeforge_asset.zip');
-        document.body.appendChild(link);
-        link.click();
-        
-        setStatus('Success! Asset downloaded (Check your Downloads folder).');
-        // Note: Preview is disabled in this MVP step because the response is a ZIP.
-        setGeneratedImage(null);
+    // Determine which endpoint to hit
+    const endpoint = batchSize > 1 ? 'http://127.0.0.1:8000/generate_batch' : 'http://127.0.0.1:8000/generate';
+  
+    if (batchSize > 1) {
+        formData.append('batch_size', batchSize);
+    }
+  
+    try {
+      setStatus(`Artist: Forging dataset (${batchSize} items)... This may take time.`); 
+  
+      const response = await axios.post(endpoint, formData, {
+        responseType: 'blob' 
+      });
+  
+      // Download Logic (Same as before)
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', batchSize > 1 ? 'edgeforge_dataset.zip' : 'edgeforge_asset.zip');
+      document.body.appendChild(link);
+      link.click();
+  
+      setStatus('Success! Dataset downloaded.');
+      setGeneratedImage(null); 
+  
     } catch (error) {
       console.error("Error:", error);
       setStatus('Error: Generation failed. Check backend console.');
@@ -88,7 +95,17 @@ function App() {
             style={{...styles.input, resize: 'none'}}
           />
         </div>
-
+        <div>
+        <label style={styles.label}>3. Batch Size: {batchSize} images</label>
+        <input 
+          type="range" 
+          min="1" 
+          max="10" 
+          value={batchSize} 
+          onChange={(e) => setBatchSize(e.target.value)}
+          style={{ width: '100%', cursor: 'pointer' }}
+        />
+        </div>
         <button 
           onClick={handleGenerate} 
           disabled={loading}
