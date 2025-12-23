@@ -1,21 +1,3 @@
-A professional `README.md` is critical—it’s the "landing page" for your code. Since you are positioning this as a startup product, the documentation should explain **what it is**, **why it's special**, and **how to run it** in one minute.
-
-Here is the complete, professional `README.md` for **EdgeForge AI**.
-
-### **Action: Update `README.md**`
-
-Overwrite your existing `README.md` with the following content:
-
-```markdown
-# ⚡ EdgeForge AI
-
-**The "Dataset Factory" for Consumer GPUs.** *Generate, Augment, and Auto-Label Synthetic Training Data locally or in the cloud.*
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://hub.docker.com/)
-[![SDXL](https://img.shields.io/badge/Model-SDXL_Turbo-orange.svg)](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)
-
----
 
 ## 🚀 What is EdgeForge?
 
