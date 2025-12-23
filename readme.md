@@ -23,7 +23,7 @@ The easiest way to use EdgeForge is to use our hosted UI with your local GPU.
 
 2.  **Run the Engine (Your GPU):** Open your terminal and run the Docker container. This creates a secure server on your machine.
     ```bash
-    docker run --gpus all -p 8000:8000 <your_dockerhub_username>/edgeforge-ai:v1
+    docker run --gpus all -p 8000:8000 wallababa/edgeforge-ai:v1
     ```
     *(Don't have Docker? See [Manual Installation](#manual-installation-python) below)*
 
