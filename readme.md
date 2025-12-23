@@ -44,7 +44,7 @@ Build the container yourself to ensure all dependencies are locked.
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/](https://github.com/)<your-username>/edgeforge-ai.git
+git clone https://github.com/yashsinha1702/edgeforge-ai.git
 cd edgeforge-ai
 
 # 2. Build the image (Takes ~10 mins first time)
