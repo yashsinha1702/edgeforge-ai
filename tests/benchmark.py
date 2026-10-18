@@ -34,7 +34,10 @@ def run_benchmark():
     print("Loading VAE model (SDXL)...")
     model_id = "stabilityai/sdxl-vae"
     try:
-        vae = AutoencoderKL.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
+        # float32, like the main pipeline: TiledVAEWrapper casts each latent tile to
+        # float32 (an fp16 VAE would fail with a dtype mismatch, and the SDXL VAE
+        # produces NaN / black tiles in fp16).
+        vae = AutoencoderKL.from_pretrained(model_id, torch_dtype=torch.float32).to("cuda")
     except Exception as e:
         print(f"Error loading model: {e}")
         print("Please ensure you have internet access or the model cached.")

@@ -1,5 +1,8 @@
-
-torch>=2.1.0 --index-url https://download.pytorch.org/whl/cu121
+# PyTorch: pip ignores an --index-url written on the same line as a requirement,
+# so install the CUDA build first (see README):
+#   pip install "torch>=2.1.0" --index-url https://download.pytorch.org/whl/cu121
+# The Docker image ships with torch 2.1.0 + CUDA 12.1 preinstalled.
+torch>=2.1.0
 
 diffusers==0.25.0
 transformers>=4.35.0
@@ -11,6 +14,7 @@ huggingface_hub<0.25.0
 
 opencv-python>=4.8.0
 pillow>=10.0.0
+tqdm>=4.66.0
 
 numpy<2.0
 ultralytics>=8.0.0
