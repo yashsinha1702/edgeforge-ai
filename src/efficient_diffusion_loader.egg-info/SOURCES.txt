@@ -1,8 +1,0 @@
-setup.py
-src/efficient_diffusion_loader/__init__.py
-src/efficient_diffusion_loader/tiled_vae.py
-src/efficient_diffusion_loader.egg-info/PKG-INFO
-src/efficient_diffusion_loader.egg-info/SOURCES.txt
-src/efficient_diffusion_loader.egg-info/dependency_links.txt
-src/efficient_diffusion_loader.egg-info/requires.txt
-src/efficient_diffusion_loader.egg-info/top_level.txt

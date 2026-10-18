@@ -1,0 +1,12 @@
+# The image only needs requirements.txt and src/ (see Dockerfile).
+.git
+frontend
+tests
+**/__pycache__
+**/*.pyc
+*.egg-info
+*.pt
+temp_*.png
+.venv
+venv
+.env

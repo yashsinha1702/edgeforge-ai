@@ -1,7 +1,0 @@
-torch>=2.0.0
-diffusers>=0.20.0
-transformers
-accelerate
-numpy
-pillow
-tqdm
