@@ -8,9 +8,17 @@ EdgeForge is a **Synthetic Data Platform** built for startups and engineers who 
 
 It transforms a **single input sketch/layout** into **batches of diverse, labelled training images**. The layout's edges constrain an SDXL + ControlNet generator, a prompt engine adds hard conditions (fog, night, rain, rust, motion blur and more), a layout augmenter adds geometric variety, and a YOLOv8 model writes bounding-box labels in YOLO format. You get back a `.zip` with `images/` and `labels/` folders.
 
+![One coarse car layout, its Canny edges, a remixed layout, and the generated image with its YOLO label](docs/pipeline.jpg)
+
+![Eight images from one batch request, each with its own sampled condition and the YOLO boxes written to the dataset](docs/gallery.jpg)
+
+<sub>Real output, not cherry-picked: one `POST /generate_batch` call ("a car on a highway", batch size 8) on a free Colab T4, from the layout in [`docs/layout.png`](docs/layout.png). The boxes are the zip's own YOLO labels, mistakes included (a car in fog labelled "airplane", two merged cars labelled "truck"), which is why the labels need a spot-check before training.</sub>
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/yashsinha1702/edgeforge-ai/blob/main/notebooks/colab_demo.ipynb) **Try it on a free GPU:** the notebook installs EdgeForge on Colab, starts the engine and generates a small labelled dataset.
+
 ### **Key Features**
 
-* **🎨 Memory-efficient high-res decoding:** A custom **Tiled VAE** decodes latents in 512 px tiles ("fractional batches") with Gaussian-weighted blending, so decoder VRAM is set by the tile size, not the image size. The generation pipeline produces 1024×1024 images. `tests/benchmark.py` stress-tests the decoder on 4096×4096 latents and reports peak VRAM.
+* **🎨 Memory-efficient high-res decoding:** A custom **Tiled VAE** decodes latents in 512 px tiles ("fractional batches") with Gaussian-weighted blending, so decoder VRAM is set by the tile size, not the image size: measured on a T4, it decodes 4096×4096 with 0.76 GB, where a plain decode runs out of memory ([benchmarks](#-benchmarks--tests)). The generation pipeline produces 1024×1024 images. `tests/benchmark.py` stress-tests the decoder on 4096×4096 latents and reports peak VRAM.
 * **🏷️ Automated Annotation:** An integrated **YOLOv8** auto-labeller writes standard YOLO-format (`.txt`) bounding boxes for every generated image.
 * **🏭 The Dataset Factory:** Batch mode produces unique variations of one intent. Each image gets a different visibility, weather or damage condition and a different random seed.
 * **📐 Layout Augmentation:** Shifts, scales, flips and multiplies the input layout to create geometric diversity (for example, "1 car" → "3 cars in the distance").
@@ -51,7 +59,7 @@ Use the hosted UI with the engine running on your own GPU.
 
 1.  **Run the Engine (your GPU):** Build and run the Docker image (see [Option A](#option-a-docker-recommended) below). The first start downloads the model weights, so wait for `Factory Ready! 🚀` in the logs.
 
-2.  **Open the Web Interface:** Go to **[https://edgeforge-ai.vercel.app](https://edgeforge-ai.vercel.app)**. The page calls the engine at `http://127.0.0.1:8000` directly from your browser. If your browser blocks requests from the hosted page to localhost, run the frontend locally instead (`npm run dev`, see Option B).
+2.  **Open the Web Interface:** Go to **[https://edgeforge-ai.vercel.app](https://edgeforge-ai.vercel.app)**. Until you generate, it shows real example output. To generate, the page calls the engine at `http://127.0.0.1:8000` directly from your browser. If your browser blocks requests from the hosted page to localhost, run the frontend locally instead (`npm run dev`, see Option B).
 
 3.  **Generate:** Upload a layout, describe the intent, choose a batch size and click **Generate Asset**. The dataset downloads as a `.zip`. You can generate as many datasets as you like for free on your own hardware.
 
@@ -61,9 +69,9 @@ Use the hosted UI with the engine running on your own GPU.
 
 ### **Prerequisites**
 
-* NVIDIA GPU with CUDA (8 GB+ VRAM recommended). The pipeline runs SDXL in fp16 with CUDA model offload, so a CPU-only setup isn't practical.
+* NVIDIA GPU with CUDA (8 GB+ VRAM recommended). The pipeline runs SDXL in fp16, so a CPU-only setup isn't practical. With less than 14 GB of VRAM it uses model CPU offload, which parks the models in system RAM (more than 13 GB of RAM: on a 13 GB Colab VM the offload step gets the process killed); with 14 GB or more, such as Colab's T4, the models stay on the GPU.
 * Docker with the NVIDIA Container Toolkit (for Container mode) OR Python 3.10–3.12 (for Source mode). `numpy<2` has no Python 3.13 wheels.
-* Disk space for model weights. The first start downloads SDXL base, the SDXL Canny ControlNet and the SDXL VAE from Hugging Face (well over 10 GB in total), and ultralytics downloads `yolov8n.pt` automatically. No weights are stored in this repo.
+* Disk space for model weights. The first start downloads the fp16 weights of SDXL base and the SDXL Canny ControlNet, plus the SDXL VAE, from Hugging Face (about 10 GB in total), and ultralytics downloads `yolov8n.pt` automatically. No weights are stored in this repo.
 
 ### **Option A: Docker (Recommended)**
 
@@ -112,12 +120,12 @@ npm run dev
 
 * **Best for:** Testing prompts and layouts.
 * **Input:** Upload a coarse layout (for example, a white car on a black background) or a Canny edge map, and set the batch size to 1.
-* **Output:** `edgeforge_asset.zip` containing `generated_image.png` (1024×1024) and `generated_image.txt` (YOLO labels). Single-shot uses a fixed seed (42), so results are repeatable for the same input.
+* **Output:** `edgeforge_asset.zip` containing `generated_image.png` (1024×1024), `generated_image.txt` (YOLO labels) and `prompt.json` (the expanded prompt). Single-shot uses a fixed seed (42), so results are repeatable for the same input and prompt.
 
 ### **2. Batch Factory Mode (Production)**
 
 * **Best for:** Creating the actual training dataset.
-* **Batch Size:** The UI slider goes from 2 to 10. The API accepts any integer.
+* **Batch Size:** The UI slider goes from 2 to 10. The API accepts 1 to 50.
 * **Process:**
   1. **Augment:** The engine randomly shifts, scales, flips and multiplies the input layout for every image.
   2. **Generate:** Each image gets a randomly sampled condition: low visibility (fog, night, blizzard, motion blur), weather (rainstorm, harsh sunlight) or damage (rust, dents, dirt).
@@ -125,6 +133,7 @@ npm run dev
 * **Output:** `edgeforge_dataset.zip` containing:
   * `images/train_0000.png`, ... (the generated synthetic data)
   * `labels/train_0000.txt`, ... (YOLO text files)
+  * `prompts.json` (the prompt, condition and seed behind each image, so a dataset can be traced and regenerated)
 
 ### **3. Using the API directly**
 
@@ -152,6 +161,9 @@ Interactive API docs are available at `http://127.0.0.1:8000/docs`.
 ## 🧪 Benchmarks & Tests
 
 ```bash
+# API tests, CPU only: fake GPU pipeline, real prompt engine and layout augmenter
+pip install pytest httpx && pytest tests/test_api.py
+
 # Tiled VAE stress test: decodes random 4096x4096 latents and prints time and peak VRAM (GPU required)
 PYTHONPATH=src/efficient_diffusion_loader python tests/benchmark.py
 
@@ -159,7 +171,27 @@ PYTHONPATH=src/efficient_diffusion_loader python tests/benchmark.py
 cd src && python test_generation.py
 ```
 
-There's no CPU-only unit-test suite yet. Running bare `pytest` collects `src/test_generation.py`, which loads the full SDXL pipeline at import time, so run the scripts above directly instead.
+`tests/test_api.py` checks the zips each endpoint returns, the 400 and 422 errors, that two concurrent requests never run on the GPU at the same time while the server keeps answering, and that no temp files are written. Run it by path: bare `pytest` also collects `src/test_generation.py`, which loads the full SDXL pipeline at import time.
+
+### Measured on a free Colab T4 (15 GB)
+
+October 2026, Python 3.12, torch 2.11, diffusers 0.25.0, the models kept on the GPU:
+
+| Step | Result |
+|---|---|
+| Load all models (weights already downloaded) | 42 s |
+| One 1024×1024 image: 50 SDXL + ControlNet steps, tiled decode, YOLO labels | about 80 s |
+| Peak GPU memory while generating | 9.9 GB allocated by PyTorch |
+
+Decoding random SDXL latents with the fp32 VAE, tiles of 512 px with 64 px overlap as in `pipeline.py` (peak memory on top of the VAE's own weights):
+
+| Output size | Plain `vae.decode` | diffusers `enable_tiling()` | EdgeForge tiled decoder |
+|---|---|---|---|
+| 1024 × 1024 | 2.6 s, 3.0 GB | 2.7 s, 3.0 GB | 5.5 s, 0.76 GB |
+| 2048 × 2048 | 18.3 s, 12.0 GB | 17.1 s, 3.0 GB | 16.0 s, 0.76 GB |
+| 4096 × 4096 | out of memory | 77.2 s, 3.3 GB | 60.7 s, 0.76 GB |
+
+The tiled decoder's memory stays at 0.76 GB at every size because only one 512 px tile is on the GPU at a time and the blended image is accumulated in system RAM. It pays for that at 1024 px, where a single plain decode is cheaper.
 
 ---
 
@@ -177,8 +209,12 @@ edgeforge-ai/
 │   │   └── labeler.py                 # YOLOv8 auto-labeller -> YOLO .txt
 │   ├── test_generation.py             # Manual end-to-end generation script (GPU)
 │   └── input_layout.jpg               # Sample input for test_generation.py
-├── tests/benchmark.py                 # Tiled VAE time / VRAM benchmark at 4096x4096 (GPU)
-├── frontend/                          # React + Vite UI
+├── tests/
+│   ├── test_api.py                    # API tests on CPU (fake GPU pipeline)
+│   └── benchmark.py                   # Tiled VAE time / VRAM benchmark at 4096x4096 (GPU)
+├── notebooks/colab_demo.ipynb         # Run the engine on a free Colab T4
+├── docs/                              # README images and the sample layout (layout.png)
+├── frontend/                          # React + Vite UI (public/examples: sample outputs for the hosted page)
 ├── TiledVAEWrapper.py                 # Earlier standalone version of the tiled decoder
 ├── Dockerfile                         # CUDA 12.1 / PyTorch 2.1 runtime image for the API
 ├── requirements.txt
@@ -189,7 +225,7 @@ edgeforge-ai/
 
 ## ⚠️ Limitations & Security
 
-* **Synchronous generation:** Each request blocks until the whole batch is generated and zipped in memory, so very large batches are slow and memory-hungry. A job queue with progress reporting is the natural next step.
+* **Synchronous generation:** Each request waits until its whole batch is generated and zipped in memory, so large batches are slow (about 80 s per image on a T4) and memory-hungry. Requests run one at a time on the GPU and queue behind each other; the server itself keeps answering. A job queue with progress reporting is the natural next step.
 * **Output resolution:** The pipeline currently generates 1024×1024 images. The tiled decoder scales further, but larger generation sizes aren't wired up.
 * **The Director is rule-based:** It uses keyword matching and random sampling from a fixed ontology. Its structured `constraints` output is informational and not yet consumed downstream.
 * **No authentication:** The API allows all CORS origins and has no auth, so any web page you open could send it requests. Keep it bound to `127.0.0.1` (as in the commands above) and don't expose port 8000 on untrusted networks.

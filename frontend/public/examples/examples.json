@@ -1,0 +1,34 @@
+[
+ {
+  "file": "example_1.jpg",
+  "caption": "rainstorm · 1 YOLO box"
+ },
+ {
+  "file": "example_2.jpg",
+  "caption": "rusty · 1 YOLO box"
+ },
+ {
+  "file": "example_3.jpg",
+  "caption": "rusty · 3 YOLO boxes"
+ },
+ {
+  "file": "example_4.jpg",
+  "caption": "rusty · 1 YOLO box"
+ },
+ {
+  "file": "example_5.jpg",
+  "caption": "heavy fog · 1 YOLO box"
+ },
+ {
+  "file": "example_6.jpg",
+  "caption": "harsh sunlight · 2 YOLO boxes"
+ },
+ {
+  "file": "example_7.jpg",
+  "caption": "heavy fog · 2 YOLO boxes"
+ },
+ {
+  "file": "example_8.jpg",
+  "caption": "rainstorm · 3 YOLO boxes"
+ }
+]

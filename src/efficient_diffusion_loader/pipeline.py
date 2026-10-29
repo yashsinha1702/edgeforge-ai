@@ -13,9 +13,12 @@ class EdgeForgePipeline:
         # 1. Load ControlNet (The 'Structure' enforcer)
         # Using 'Canny' (Edge Detection) allows us to sketch a scene and have AI fill it.
         controlnet_id = "diffusers/controlnet-canny-sdxl-1.0"
+        # variant="fp16" downloads the half-precision weight files, about half the download
+        # (the weights are cast to float16 anyway).
         self.controlnet = ControlNetModel.from_pretrained(
-            controlnet_id, 
-            torch_dtype=torch.float16
+            controlnet_id,
+            torch_dtype=torch.float16,
+            variant="fp16",
         ).to(device)
 
         # 2. Load the VAE (The 'Memory' bottleneck)
@@ -38,10 +41,16 @@ class EdgeForgePipeline:
             controlnet=self.controlnet,
             vae=self.vae, # Pass our VAE (which we will hijack during decode)
             torch_dtype=torch.float16,
+            variant="fp16",
         ).to(device)
         
-        # Optimize for speed
-        self.pipe.enable_model_cpu_offload() # Standard Diffusers optimization
+        # Model CPU offload keeps only the model in use on the GPU, so SDXL + ControlNet fit an
+        # 8-12 GB card, but it parks every model in system RAM (about 10 GB). With 14 GB or more
+        # of VRAM the models stay on the GPU instead: faster, and it fits machines with little
+        # RAM (on a 13 GB Colab VM with a T4, offloading gets the process killed).
+        vram = torch.cuda.get_device_properties(0).total_memory if str(device).startswith("cuda") else 0
+        if vram < 14 * 2**30:
+            self.pipe.enable_model_cpu_offload()
 
     def preprocess_canny(self, image_path):
         """

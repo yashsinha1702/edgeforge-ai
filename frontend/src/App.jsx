@@ -1,18 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
+
+const ENGINE = 'http://127.0.0.1:8000';
 
 // Simple inline styles for the MVP (startup speed > perfection)
 const styles = {
   container: { display: 'flex', height: '100vh', fontFamily: 'Arial, sans-serif', backgroundColor: '#1a1a1a', color: '#fff' },
   panel: { padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' },
   left: { width: '350px', borderRight: '1px solid #333', backgroundColor: '#252525' },
-  right: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#121212' },
-  input: { padding: '12px', borderRadius: '5px', border: '1px solid #444', backgroundColor: '#333', color: '#fff', width: '100%' },
+  right: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', overflowY: 'auto', backgroundColor: '#121212' },
+  input: { padding: '12px', borderRadius: '5px', border: '1px solid #444', backgroundColor: '#333', color: '#fff', width: '100%', boxSizing: 'border-box' },
   button: { padding: '15px', borderRadius: '5px', border: 'none', backgroundColor: '#007bff', color: '#fff', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' },
   imagePreview: { maxWidth: '100%', maxHeight: '80vh', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' },
   label: { fontSize: '14px', color: '#aaa', marginBottom: '5px', display: 'block' },
-  status: { color: '#00ff88', fontSize: '14px', marginTop: '10px' }
+  status: { color: '#00ff88', fontSize: '14px', marginTop: '10px' },
+  examples: { width: '100%', maxWidth: '980px', display: 'flex', flexDirection: 'column', gap: '14px', alignSelf: 'flex-start', margin: '0 auto' },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' },
+  figure: { margin: 0, backgroundColor: '#1d1d1d', borderRadius: '8px', overflow: 'hidden', border: '1px solid #2c2c2c' },
+  thumb: { width: '100%', display: 'block', aspectRatio: '1 / 1', objectFit: 'cover' },
+  caption: { fontSize: '12px', color: '#bbb', padding: '8px 10px' },
+  note: { fontSize: '13px', color: '#999', lineHeight: 1.5 }
 };
+
+// Real outputs of the pipeline (see the README), so the page shows what it makes before any engine runs.
+function Examples() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    fetch('/examples/examples.json').then(r => (r.ok ? r.json() : [])).then(setItems).catch(() => setItems([]));
+  }, []);
+  return (
+    <div style={styles.examples}>
+      <h3 style={{ margin: 0 }}>Example output</h3>
+      <div style={styles.note}>
+        One coarse car layout in, labelled images out: each image gets a different condition and seed, and the boxes are
+        the YOLOv8 labels written to the dataset. Generating your own needs the engine running on your GPU at <code>{ENGINE}</code> (see the README).
+      </div>
+      <div style={styles.grid}>
+        {items.map(item => (
+          <figure key={item.file} style={styles.figure}>
+            <img src={`/examples/${item.file}`} alt={item.caption} style={styles.thumb} loading="lazy" />
+            <figcaption style={styles.caption}>{item.caption}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [prompt, setPrompt] = useState('');
@@ -42,7 +75,7 @@ function App() {
     formData.append('control_image', file);
   
     // Determine which endpoint to hit
-    const endpoint = batchSize > 1 ? 'http://127.0.0.1:8000/generate_batch' : 'http://127.0.0.1:8000/generate';
+    const endpoint = batchSize > 1 ? `${ENGINE}/generate_batch` : `${ENGINE}/generate`;
   
     if (batchSize > 1) {
         formData.append('batch_size', batchSize);
@@ -68,7 +101,9 @@ function App() {
   
     } catch (error) {
       console.error("Error:", error);
-      setStatus('Error: Generation failed. Check backend console.');
+      setStatus(error.response
+        ? `Error ${error.response.status}: generation failed. Check the engine's console.`
+        : `Error: no engine at ${ENGINE}. Start it on your GPU (see the README), then try again.`);
     } finally {
       setLoading(false);
     }
@@ -122,7 +157,7 @@ function App() {
         {generatedImage ? (
           <img src={generatedImage} alt="Generated Asset" style={styles.imagePreview} />
         ) : (
-          <div style={{ color: '#444' }}>Upload layout and prompt to begin.</div>
+          <Examples />
         )}
       </div>
     </div>
